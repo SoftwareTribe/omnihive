@@ -20,6 +20,7 @@ import ipc from "node-ipc";
 import redis from "redis";
 import * as socketio from "socket.io";
 import { v4 as uuidv4 } from "uuid";
+import { serializeError } from "serialize-error";
 
 let ipcId: string = uuidv4();
 ipc.config.id = ipcId;
@@ -199,7 +200,7 @@ export class AdminService {
                         verified: true,
                     });
                 } catch (e) {
-                    this.sendErrorToSocket(AdminEventType.ConfigSaveRequest, socket, e);
+                    this.sendErrorToSocket(AdminEventType.ConfigSaveRequest, socket, serializeError(e));
                     return;
                 }
             });

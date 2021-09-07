@@ -3,7 +3,6 @@ import { IConfigWorker } from "@withonevision/omnihive-core/interfaces/IConfigWo
 import { HiveWorkerConfig } from "@withonevision/omnihive-core/models/HiveWorkerConfig";
 import { HiveWorkerBase } from "@withonevision/omnihive-core/models/HiveWorkerBase";
 import fse from "fs-extra";
-import { serializeError } from "serialize-error";
 import knex, { Knex } from "knex";
 import mysql from "mysql2";
 import { Pool } from "mysql2/promise";
@@ -27,49 +26,45 @@ export default class MySqlConfigWorker extends HiveWorkerBase implements IConfig
     }
 
     public async init(name: string, metadata?: any): Promise<void> {
-        try {
-            await AwaitHelper.execute(super.init(name, metadata));
-            this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataConfigDatabase>(
-                HiveWorkerMetadataConfigDatabase,
-                metadata
-            );
+        await AwaitHelper.execute(super.init(name, metadata));
+        this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataConfigDatabase>(
+            HiveWorkerMetadataConfigDatabase,
+            metadata
+        );
 
-            this.sqlConfig = {
-                host: this.typedMetadata.serverAddress,
-                port: this.typedMetadata.serverPort,
-                database: this.typedMetadata.databaseName,
-                user: this.typedMetadata.userName,
-                password: this.typedMetadata.password,
-            };
+        this.sqlConfig = {
+            host: this.typedMetadata.serverAddress,
+            port: this.typedMetadata.serverPort,
+            database: this.typedMetadata.databaseName,
+            user: this.typedMetadata.userName,
+            password: this.typedMetadata.password,
+        };
 
-            if (this.typedMetadata.requireSsl) {
-                if (IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.sslCertPath)) {
-                    this.sqlConfig.ssl = this.typedMetadata.requireSsl;
-                } else {
-                    this.sqlConfig.ssl = {
-                        ca: fse.readFileSync(this.typedMetadata.sslCertPath).toString(),
-                    };
-                }
+        if (this.typedMetadata.requireSsl) {
+            if (IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.sslCertPath)) {
+                this.sqlConfig.ssl = this.typedMetadata.requireSsl;
+            } else {
+                this.sqlConfig.ssl = {
+                    ca: fse.readFileSync(this.typedMetadata.sslCertPath).toString(),
+                };
             }
-
-            this.connectionPool = mysql
-                .createPool({
-                    ...this.sqlConfig,
-                    connectionLimit: 10,
-                    multipleStatements: true,
-                })
-                .promise();
-
-            const connectionOptions: Knex.Config = {
-                connection: {},
-                pool: { min: 0, max: 10 },
-            };
-            connectionOptions.client = "mysql2";
-            connectionOptions.connection = this.sqlConfig;
-            this.connection = knex(connectionOptions);
-        } catch (err) {
-            throw new Error("MySQL Init Error => " + JSON.stringify(serializeError(err)));
         }
+
+        this.connectionPool = mysql
+            .createPool({
+                ...this.sqlConfig,
+                connectionLimit: 10,
+                multipleStatements: true,
+            })
+            .promise();
+
+        const connectionOptions: Knex.Config = {
+            connection: {},
+            pool: { min: 0, max: 10 },
+        };
+        connectionOptions.client = "mysql2";
+        connectionOptions.connection = this.sqlConfig;
+        this.connection = knex(connectionOptions);
     }
 
     public get = async (): Promise<ServerConfig> => {
@@ -233,12 +228,12 @@ export default class MySqlConfigWorker extends HiveWorkerBase implements IConfig
             }
 
             for (let variable of currentSettings.environmentVariables.filter((value) => !value.isSystem)) {
-                const deleteConstantsQuery: string = `DELETE oh_srv_config_environment where config_id = ${this.configId} AND environment_key = '${variable.key}';`;
+                const deleteConstantsQuery: string = `DELETE FROM oh_srv_config_environment where config_id = ${this.configId} AND environment_key = '${variable.key}';`;
                 await AwaitHelper.execute(connection.query(deleteConstantsQuery));
             }
 
             for (let worker of currentSettings.workers) {
-                const deleteWorkerQuery: string = `DELETE oh_srv_config_workers where config_id = ${this.configId} AND worker_name = '${worker.name}';`;
+                const deleteWorkerQuery: string = `DELETE FROM oh_srv_config_workers where config_id = ${this.configId} AND worker_name = '${worker.name}';`;
                 await AwaitHelper.execute(connection.query(deleteWorkerQuery));
             }
 
@@ -247,7 +242,7 @@ export default class MySqlConfigWorker extends HiveWorkerBase implements IConfig
             if (!IsHelper.isNullOrUndefined(connection)) {
                 await AwaitHelper.execute(connection.rollback());
             }
-            throw new Error("MySQL Config Save Error => " + JSON.stringify(serializeError(err)));
+            throw err;
         } finally {
             connection.release();
         }

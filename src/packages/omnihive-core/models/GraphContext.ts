@@ -1,6 +1,6 @@
 export class GraphContext {
-    public access: string | undefined;
-    public auth: string | undefined;
-    public cache: string | undefined;
-    public cacheSeconds: number | undefined;
+    public access: string | undefined = undefined;
+    public auth: string | undefined = undefined;
+    public cache: string | undefined = undefined;
+    public cacheSeconds: number | undefined = undefined;
 }

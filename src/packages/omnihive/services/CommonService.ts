@@ -13,7 +13,7 @@ import { ServerConfig } from "@withonevision/omnihive-core/models/ServerConfig";
 import { EnvironmentVariable } from "@withonevision/omnihive-core/models/EnvironmentVariable";
 import { HiveWorkerConfig } from "@withonevision/omnihive-core/models/HiveWorkerConfig";
 import { RegisteredHiveWorker } from "@withonevision/omnihive-core/models/RegisteredHiveWorker";
-import childProcess from "child_process";
+import execa from "execa";
 import readPkgUp, { NormalizedReadResult } from "read-pkg-up";
 import { ConfigType } from "../enums/ConfigType";
 import { CommandLineArgs } from "../models/CommandLineArgs";
@@ -242,7 +242,7 @@ export class CommonService {
             });
         }
 
-        logWorker?.write(OmniHiveLogLevel.Info, `Working on hive worker packages...`);
+        logWorker?.write(OmniHiveLogLevel.Info, `Working on package management...`);
 
         if (
             !IsHelper.isNullOrUndefined(pkgJson) &&
@@ -295,36 +295,56 @@ export class CommonService {
             }
 
             if (IsHelper.isEmptyArray(packagesToRemove)) {
-                logWorker?.write(OmniHiveLogLevel.Info, `No Custom Packages to Uninstall...Moving On`);
+                logWorker?.write(OmniHiveLogLevel.Info, `No Packages to Uninstall...Moving On`);
             } else {
-                logWorker?.write(OmniHiveLogLevel.Info, `Removing ${packagesToRemove.length} Custom Package(s)`);
+                logWorker?.write(OmniHiveLogLevel.Info, `Removing ${packagesToRemove.length} Package(s)`);
                 const removeCommand = new StringBuilder();
                 removeCommand.append("yarn remove ");
 
                 packagesToRemove.forEach((packageName: string, index: number) => {
-                    logWorker?.write(OmniHiveLogLevel.Info, `Removing ${packageName} As a Custom Package(s)`);
-                    removeCommand.append(packageName);
+                    logWorker?.write(OmniHiveLogLevel.Info, `Removing ${packageName} Package`);
+                    removeCommand.append(`${packageName}`);
 
                     if (index < packagesToRemove.length - 1) {
                         removeCommand.append(" ");
                     }
                 });
 
-                const removeSpawn = childProcess.spawnSync(removeCommand.outputString(), {
-                    shell: true,
-                    cwd: global.omnihive.ohDirName,
-                    stdio: ["inherit", "pipe", "pipe"],
-                });
-
-                if (removeSpawn.status !== 0) {
-                    const removeError: Error = new Error(removeSpawn.stderr.toString().trim());
-                    logWorker?.write(OmniHiveLogLevel.Error, removeSpawn.stderr.toString().trim());
+                try {
+                    execa.commandSync(removeCommand.outputString(), { cwd: global.omnihive.ohDirName });
+                } catch (removeError) {
+                    logWorker?.write(OmniHiveLogLevel.Error, removeError.stderr.toString().trim());
                     throw removeError;
                 }
             }
 
+            logWorker?.write(OmniHiveLogLevel.Info, `Cleaning Yarn Cache`);
+
+            // Clean Yarn Cache
+            try {
+                execa.commandSync("yarn cache clean", { cwd: global.omnihive.ohDirName });
+            } catch (cleanError) {
+                logWorker?.write(OmniHiveLogLevel.Error, cleanError.stderr.toString().trim());
+                throw cleanError;
+            }
+
             //Find out what to add
             const packagesToAdd: string[] = [];
+
+            for (const corePackage of Object.entries(corePackages)) {
+                let addCorePackage: boolean = true;
+
+                for (const loadedPackage of Object.entries(loadedPackages)) {
+                    if (corePackage[0] === loadedPackage[0] && corePackage[1] === loadedPackage[1]) {
+                        addCorePackage = false;
+                        break;
+                    }
+                }
+
+                if (addCorePackage) {
+                    packagesToAdd.push(`${corePackage[0]}@${corePackage[1]}`);
+                }
+            }
 
             for (const workerPackage of Object.entries(workerPackages)) {
                 let addWorkerPackage: boolean = true;
@@ -342,36 +362,31 @@ export class CommonService {
             }
 
             if (IsHelper.isEmptyArray(packagesToAdd)) {
-                logWorker?.write(OmniHiveLogLevel.Info, `No Custom Packages to Add...Moving On`);
+                logWorker?.write(OmniHiveLogLevel.Info, `No Packages to Add...Moving On`);
             } else {
-                logWorker?.write(OmniHiveLogLevel.Info, `Adding ${packagesToAdd.length} Custom Package(s)`);
+                logWorker?.write(OmniHiveLogLevel.Info, `Adding ${packagesToAdd.length} Package(s)`);
                 const addCommand = new StringBuilder();
                 addCommand.append("yarn add ");
 
                 packagesToAdd.forEach((packageName: string, index: number) => {
-                    logWorker?.write(OmniHiveLogLevel.Info, `Adding ${packageName} As a Custom Package(s)`);
-                    addCommand.append(packageName);
+                    logWorker?.write(OmniHiveLogLevel.Info, `Adding ${packageName} As a New Package`);
+                    addCommand.append(`${packageName}`);
 
                     if (index < packagesToAdd.length - 1) {
                         addCommand.append(" ");
                     }
                 });
 
-                const addSpawn = childProcess.spawnSync(addCommand.outputString(), {
-                    shell: true,
-                    cwd: global.omnihive.ohDirName,
-                    stdio: ["inherit", "pipe", "pipe"],
-                });
-
-                if (addSpawn.status !== 0) {
-                    const addError: Error = new Error(addSpawn.stderr.toString().trim());
-                    logWorker?.write(OmniHiveLogLevel.Error, addSpawn.stderr.toString().trim());
+                try {
+                    execa.commandSync(addCommand.outputString(), { cwd: global.omnihive.ohDirName });
+                } catch (addError) {
+                    logWorker?.write(OmniHiveLogLevel.Error, addError.stderr.toString().trim());
                     throw addError;
                 }
             }
         }
 
-        logWorker?.write(OmniHiveLogLevel.Info, "Custom packages complete");
+        logWorker?.write(OmniHiveLogLevel.Info, "Package management complete");
 
         // Register hive workers
         logWorker?.write(OmniHiveLogLevel.Info, "Working on hive workers...");

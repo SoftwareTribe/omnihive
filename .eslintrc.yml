@@ -20,7 +20,6 @@ rules:
     "no-case-declarations": off
 overrides:
     - files:
-        - "*.js"
+          - "*.js"
       rules:
-        - "@typescript-eslint/no-var-requires": off
-],
+          - "@typescript-eslint/no-var-requires": off

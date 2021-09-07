@@ -80,9 +80,11 @@ export class ParseInsert {
                     this.databaseWorker.executeQuery(this.builder.toString())
                 );
 
+                const parentAlias: string | undefined = resolveInfo.fieldNodes[0].alias?.value;
+
                 // Convert the database proc return back into it's graph equivalent
                 const graphReturn: any = this.graphHelper.buildGraphReturn(
-                    structure[resolveInfo.fieldName],
+                    structure[parentAlias ?? resolveInfo.fieldName],
                     results[0],
                     this.dateWorker,
                     false

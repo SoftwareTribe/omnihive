@@ -10,7 +10,6 @@ import { HiveWorkerBase } from "@withonevision/omnihive-core/models/HiveWorkerBa
 import { ProcFunctionSchema } from "@withonevision/omnihive-core/models/ProcFunctionSchema";
 import { TableSchema } from "@withonevision/omnihive-core/models/TableSchema";
 import knex, { Knex } from "knex";
-import { serializeError } from "serialize-error";
 import fse from "fs-extra";
 import path from "path";
 import { HiveWorkerMetadataDatabase } from "@withonevision/omnihive-core/models/HiveWorkerMetadataDatabase";
@@ -42,25 +41,21 @@ export default class MySqlDatabaseWorker extends HiveWorkerBase implements IData
         sqliteMetadata.sslCertPath = "";
         sqliteMetadata.userName = "";
 
-        try {
-            await AwaitHelper.execute(super.init(name, metadata));
-            this.typedMetadata = this.checkObjectStructure<SqliteWorkerMetadata>(SqliteWorkerMetadata, sqliteMetadata);
+        await AwaitHelper.execute(super.init(name, metadata));
+        this.typedMetadata = this.checkObjectStructure<SqliteWorkerMetadata>(SqliteWorkerMetadata, sqliteMetadata);
 
-            if (!fse.existsSync(this.typedMetadata.filename)) {
-                throw new Error("Sqlite database cannot be found");
-            }
-
-            const connectionOptions: Knex.Config = {
-                client: "sqlite3",
-                useNullAsDefault: true,
-                connection: {
-                    filename: this.typedMetadata.filename,
-                },
-            };
-            this.connection = knex(connectionOptions);
-        } catch (err) {
-            throw new Error("Sqlite Init Error => " + JSON.stringify(serializeError(err)));
+        if (!fse.existsSync(this.typedMetadata.filename)) {
+            throw new Error("Sqlite database cannot be found");
         }
+
+        const connectionOptions: Knex.Config = {
+            client: "sqlite3",
+            useNullAsDefault: true,
+            connection: {
+                filename: this.typedMetadata.filename,
+            },
+        };
+        this.connection = knex(connectionOptions);
     }
 
     public executeQuery = async (query: string, disableLog?: boolean): Promise<any[][]> => {
@@ -94,34 +89,31 @@ export default class MySqlDatabaseWorker extends HiveWorkerBase implements IData
         let tableResult: any[][];
         const logWorker: ILogWorker | undefined = this.getWorker<ILogWorker | undefined>(HiveWorkerType.Log);
 
-        try {
-            const tableFilePath = global.omnihive.getFilePath(this.typedMetadata.getSchemaSqlFile);
+        const tableFilePath = global.omnihive.getFilePath(this.typedMetadata.getSchemaSqlFile);
 
+        if (
+            !IsHelper.isNullOrUndefined(this.typedMetadata.getSchemaSqlFile) &&
+            !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile) &&
+            fse.existsSync(tableFilePath)
+        ) {
+            tableResult = await AwaitHelper.execute(this.executeQuery(fse.readFileSync(tableFilePath, "utf8"), true));
+        } else {
             if (
                 !IsHelper.isNullOrUndefined(this.typedMetadata.getSchemaSqlFile) &&
-                !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile) &&
-                fse.existsSync(tableFilePath)
+                !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile)
             ) {
+                logWorker?.write(OmniHiveLogLevel.Warn, "Provided Schema SQL File is not found.");
+            }
+            if (fse.existsSync(path.join(__dirname, "scripts", "defaultTables.sql"))) {
                 tableResult = await AwaitHelper.execute(
-                    this.executeQuery(fse.readFileSync(tableFilePath, "utf8"), true)
+                    this.executeQuery(
+                        fse.readFileSync(path.join(__dirname, "scripts", "defaultTables.sql"), "utf8"),
+                        true
+                    )
                 );
             } else {
-                if (
-                    !IsHelper.isNullOrUndefined(this.typedMetadata.getSchemaSqlFile) &&
-                    !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile)
-                ) {
-                    logWorker?.write(OmniHiveLogLevel.Warn, "Provided Schema SQL File is not found.");
-                }
-                if (fse.existsSync(path.join(__dirname, "defaultTables.sql"))) {
-                    tableResult = await AwaitHelper.execute(
-                        this.executeQuery(fse.readFileSync(path.join(__dirname, "defaultTables.sql"), "utf8"), true)
-                    );
-                } else {
-                    throw new Error(`Cannot find a table executor for ${this.name}`);
-                }
+                throw new Error(`Cannot find a table executor for ${this.name}`);
             }
-        } catch (err) {
-            throw new Error("Schema SQL File Location not found: " + JSON.stringify(serializeError(err)));
         }
 
         tableResult[tableResult.length - 1].forEach((row) => {

@@ -8,14 +8,22 @@ services:
         image: mcr.microsoft.com/mssql/server:2019-latest
         environment:
             SA_PASSWORD: mZtag2yfWAvYTqwy
-            ACCEPT_EULA: Y
+            ACCEPT_EULA: "Y"
             MSSQL_PID: Developer
         ports:
             - 1433:1433
     mysql:
-        image: mysql
+        image: mysql:8
         command: --default-authentication-plugin=mysql_native_password
         environment:
             MYSQL_ROOT_PASSWORD: mZtag2yfWAvYTqwy
         ports:
             - 3306:3306
+    postgres:
+        image: postgres:13
+        environment:
+            POSTGRES_DB: postgres
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: mZtag2yfWAvYTqwy
+        ports:
+            - 5432:5432

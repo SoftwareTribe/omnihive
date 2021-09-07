@@ -12,7 +12,6 @@ import { HiveWorkerMetadataDatabase } from "@withonevision/omnihive-core/models/
 import { ProcFunctionSchema } from "@withonevision/omnihive-core/models/ProcFunctionSchema";
 import { TableSchema } from "@withonevision/omnihive-core/models/TableSchema";
 import knex, { Knex } from "knex";
-import { serializeError } from "serialize-error";
 import fse from "fs-extra";
 import path from "path";
 import pg from "pg";
@@ -30,53 +29,50 @@ export default class PostgresDatabaseWorker extends HiveWorkerBase implements ID
     }
 
     public async init(name: string, metadata?: any): Promise<void> {
-        try {
-            await AwaitHelper.execute(super.init(name, metadata));
-            this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataDatabase>(
-                HiveWorkerMetadataDatabase,
-                metadata
-            );
+        await AwaitHelper.execute(super.init(name, metadata));
+        this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataDatabase>(
+            HiveWorkerMetadataDatabase,
+            metadata
+        );
 
-            this.sqlConfig = {
-                host: this.typedMetadata.serverAddress,
-                port: this.typedMetadata.serverPort,
-                database: this.typedMetadata.databaseName,
-                user: this.typedMetadata.userName,
-                password: this.typedMetadata.password,
-            };
+        this.sqlConfig = {
+            host: this.typedMetadata.serverAddress,
+            port: this.typedMetadata.serverPort,
+            database: this.typedMetadata.databaseName,
+            user: this.typedMetadata.userName,
+            password: this.typedMetadata.password,
+        };
 
-            if (this.typedMetadata.requireSsl) {
-                if (
-                    !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.sslCertPath) &&
-                    fse.existsSync(this.typedMetadata.sslCertPath)
-                ) {
+        if (this.typedMetadata.requireSsl) {
+            if (
+                !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.sslCertPath) &&
+                fse.existsSync(this.typedMetadata.sslCertPath)
+            ) {
+                this.sqlConfig.ssl = {
+                    ca: fse.readFileSync(this.typedMetadata.sslCertPath).toString(),
+                };
+            } else {
+                if (fse.existsSync(path.join(__dirname, this.typedMetadata.sslCertPath))) {
                     this.sqlConfig.ssl = {
                         ca: fse.readFileSync(this.typedMetadata.sslCertPath).toString(),
                     };
                 } else {
-                    if (fse.existsSync(path.join(__dirname, this.typedMetadata.sslCertPath))) {
-                        this.sqlConfig.ssl = {
-                            ca: fse.readFileSync(this.typedMetadata.sslCertPath).toString(),
-                        };
-                    } else {
-                        throw new Error(`Cannot find a ssl certification for ${this.name}`);
-                    }
+                    throw new Error(`Cannot find a ssl certification for ${this.name}`);
                 }
             }
-
-            this.connectionPool = new pg.Pool({ ...this.sqlConfig });
-            this.connectionPool.connect();
-
-            const connectionOptions: Knex.Config = {
-                connection: {},
-                pool: { min: 0, max: this.typedMetadata.connectionPoolLimit },
-            };
-            connectionOptions.client = "pg";
-            connectionOptions.connection = this.sqlConfig;
-            this.connection = knex(connectionOptions);
-        } catch (err) {
-            throw new Error("Postgres Init Error => " + JSON.stringify(serializeError(err)));
         }
+
+        this.connectionPool = new pg.Pool({ ...this.sqlConfig });
+
+        await AwaitHelper.execute(this.executeQuery("select 1 as dummy"));
+
+        const connectionOptions: Knex.Config = {
+            connection: {},
+            pool: { min: 0, max: this.typedMetadata.connectionPoolLimit },
+        };
+        connectionOptions.client = "pg";
+        connectionOptions.connection = this.sqlConfig;
+        this.connection = knex(connectionOptions);
     }
 
     public executeQuery = async (query: string, disableLog?: boolean): Promise<any[][]> => {
@@ -85,22 +81,29 @@ export default class PostgresDatabaseWorker extends HiveWorkerBase implements ID
             logWorker?.write(OmniHiveLogLevel.Info, query);
         }
 
-        const result = await AwaitHelper.execute(this.connectionPool.query(query));
+        const client: pg.PoolClient = await AwaitHelper.execute(this.connectionPool.connect());
 
-        const returnResults: any[][] = [];
-        let currentResultIndex: number = 0;
+        try {
+            const result = await AwaitHelper.execute(client.query(query));
 
-        if (!Array.isArray(result)) {
-            returnResults[currentResultIndex] = result.rows;
+            const returnResults: any[][] = [];
+
+            if (!IsHelper.isArray(result)) {
+                returnResults[0] = result.rows;
+                return returnResults;
+            }
+
+            let currentResultIndex: number = 0;
+
+            for (let r of result) {
+                returnResults[currentResultIndex] = r.rows;
+                currentResultIndex++;
+            }
+
             return returnResults;
+        } finally {
+            client.release();
         }
-
-        for (let r of result) {
-            returnResults[currentResultIndex] = r.rows;
-            currentResultIndex++;
-        }
-
-        return returnResults;
     };
 
     public executeProcedure = async (
@@ -125,7 +128,7 @@ export default class PostgresDatabaseWorker extends HiveWorkerBase implements ID
         orderBy(procFunctionSchema, ["parameterOrder"], ["asc"]).forEach(
             (schema: ProcFunctionSchema, index: number) => {
                 const arg: { name: string; value: any; isString: boolean } | undefined = args.find(
-                    (arg) => arg.name === schema.parameterName
+                    (arg) => arg.name.toLowerCase() === schema.parameterName.toLowerCase()
                 );
 
                 if (!IsHelper.isNullOrUndefined(arg)) {
@@ -140,7 +143,7 @@ export default class PostgresDatabaseWorker extends HiveWorkerBase implements ID
 
         builder.append(")");
 
-        return this.executeQuery(builder.outputString());
+        return AwaitHelper.execute(this.executeQuery(builder.outputString()));
     };
 
     public getSchema = async (): Promise<ConnectionSchema> => {
@@ -153,65 +156,58 @@ export default class PostgresDatabaseWorker extends HiveWorkerBase implements ID
         let tableResult: any[][], procResult: any[][];
         const logWorker: ILogWorker | undefined = this.getWorker<ILogWorker | undefined>(HiveWorkerType.Log);
 
-        try {
-            const tableFilePath = global.omnihive.getFilePath(this.typedMetadata.getSchemaSqlFile);
+        const tableFilePath = global.omnihive.getFilePath(this.typedMetadata.getSchemaSqlFile);
 
+        if (
+            !IsHelper.isNullOrUndefined(this.typedMetadata.getSchemaSqlFile) &&
+            !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile) &&
+            fse.existsSync(tableFilePath)
+        ) {
+            tableResult = await AwaitHelper.execute(this.executeQuery(fse.readFileSync(tableFilePath, "utf8"), true));
+        } else {
             if (
                 !IsHelper.isNullOrUndefined(this.typedMetadata.getSchemaSqlFile) &&
-                !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile) &&
-                fse.existsSync(tableFilePath)
+                !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile)
             ) {
+                logWorker?.write(OmniHiveLogLevel.Warn, "Provided Schema SQL File is not found.");
+            }
+            if (fse.existsSync(path.join(__dirname, "scripts", "defaultTables.sql"))) {
                 tableResult = await AwaitHelper.execute(
-                    this.executeQuery(fse.readFileSync(tableFilePath, "utf8"), true)
+                    this.executeQuery(
+                        fse.readFileSync(path.join(__dirname, "scripts", "defaultTables.sql"), "utf8"),
+                        true
+                    )
                 );
             } else {
-                if (
-                    !IsHelper.isNullOrUndefined(this.typedMetadata.getSchemaSqlFile) &&
-                    !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getSchemaSqlFile)
-                ) {
-                    logWorker?.write(OmniHiveLogLevel.Warn, "Provided Schema SQL File is not found.");
-                }
-                if (fse.existsSync(path.join(__dirname, "defaultTables.sql"))) {
-                    tableResult = await AwaitHelper.execute(
-                        this.executeQuery(fse.readFileSync(path.join(__dirname, "defaultTables.sql"), "utf8"), true)
-                    );
-                } else {
-                    throw new Error(`Cannot find a table executor for ${this.name}`);
-                }
+                throw new Error(`Cannot find a table executor for ${this.name}`);
             }
-        } catch (err) {
-            throw new Error("Schema SQL File Location not found: " + JSON.stringify(serializeError(err)));
         }
 
-        try {
-            const procFilePath = global.omnihive.getFilePath(this.typedMetadata.getProcFunctionSqlFile);
+        const procFilePath = global.omnihive.getFilePath(this.typedMetadata.getProcFunctionSqlFile);
 
+        if (
+            !IsHelper.isNullOrUndefined(this.typedMetadata.getProcFunctionSqlFile) &&
+            !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getProcFunctionSqlFile) &&
+            fse.existsSync(procFilePath)
+        ) {
+            procResult = await AwaitHelper.execute(this.executeQuery(fse.readFileSync(procFilePath, "utf8"), true));
+        } else {
             if (
                 !IsHelper.isNullOrUndefined(this.typedMetadata.getProcFunctionSqlFile) &&
-                !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getProcFunctionSqlFile) &&
-                fse.existsSync(procFilePath)
+                !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getProcFunctionSqlFile)
             ) {
-                procResult = await AwaitHelper.execute(this.executeQuery(fse.readFileSync(procFilePath, "utf8"), true));
-            } else {
-                if (
-                    !IsHelper.isNullOrUndefined(this.typedMetadata.getProcFunctionSqlFile) &&
-                    !IsHelper.isEmptyStringOrWhitespace(this.typedMetadata.getProcFunctionSqlFile)
-                ) {
-                    logWorker?.write(OmniHiveLogLevel.Warn, "Provided Proc SQL File is not found.");
-                }
-                if (fse.existsSync(path.join(__dirname, "defaultProcFunctions.sql"))) {
-                    procResult = await AwaitHelper.execute(
-                        this.executeQuery(
-                            fse.readFileSync(path.join(__dirname, "defaultProcFunctions.sql"), "utf8"),
-                            true
-                        )
-                    );
-                } else {
-                    throw new Error(`Cannot find a proc executor for ${this.name}`);
-                }
+                logWorker?.write(OmniHiveLogLevel.Warn, "Provided Proc SQL File is not found.");
             }
-        } catch (err) {
-            throw new Error("Schema SQL File Location not found: " + JSON.stringify(serializeError(err)));
+            if (fse.existsSync(path.join(__dirname, "scripts", "defaultProcFunctions.sql"))) {
+                procResult = await AwaitHelper.execute(
+                    this.executeQuery(
+                        fse.readFileSync(path.join(__dirname, "scripts", "defaultProcFunctions.sql"), "utf8"),
+                        true
+                    )
+                );
+            } else {
+                throw new Error(`Cannot find a proc executor for ${this.name}`);
+            }
         }
 
         tableResult[tableResult.length - 1].forEach((row) => {

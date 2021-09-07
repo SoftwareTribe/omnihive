@@ -3,7 +3,6 @@ import { IsHelper } from "@withonevision/omnihive-core/helpers/IsHelper";
 import { IPubSubServerWorker } from "@withonevision/omnihive-core/interfaces/IPubSubServerWorker";
 import { HiveWorkerBase } from "@withonevision/omnihive-core/models/HiveWorkerBase";
 import { PubSubListener } from "@withonevision/omnihive-core/models/PubSubListener";
-import { serializeError } from "serialize-error";
 import * as socketio from "socket.io";
 
 export class SocketIoPubSubServerWorkerMetadata {
@@ -38,21 +37,17 @@ export default class SocketIoPubSubServerWorker extends HiveWorkerBase implement
     }
 
     public addListener = (channelName: string, eventName: string, callback?: Function): void => {
-        try {
-            this.removeListener(channelName, eventName);
+        this.removeListener(channelName, eventName);
 
-            if (!this.listeners.some((listener: PubSubListener) => listener.eventName === eventName)) {
-                this.ioServer.addListener(eventName, (packet: { room: string; data: any }) => {
-                    if (packet.room === channelName && callback && IsHelper.isFunction(callback)) {
-                        callback(packet.data);
-                    }
-                });
-            }
-
-            this.listeners.push({ channelName, eventName, callback });
-        } catch (err) {
-            throw new Error("PubSub Add Listener Error => " + JSON.stringify(serializeError(err)));
+        if (!this.listeners.some((listener: PubSubListener) => listener.eventName === eventName)) {
+            this.ioServer.addListener(eventName, (packet: { room: string; data: any }) => {
+                if (packet.room === channelName && callback && IsHelper.isFunction(callback)) {
+                    callback(packet.data);
+                }
+            });
         }
+
+        this.listeners.push({ channelName, eventName, callback });
     };
 
     public emit = async (channelName: string, eventName: string, message: any): Promise<void> => {
@@ -64,29 +59,22 @@ export default class SocketIoPubSubServerWorker extends HiveWorkerBase implement
     };
 
     public removeListener = (channelName: string, eventName: string): void => {
-        try {
-            if (
-                this.listeners.some(
-                    (listener: PubSubListener) =>
-                        listener.channelName == channelName && listener.eventName === eventName
-                )
-            ) {
-                const listener: PubSubListener | undefined = this.listeners.find(
-                    (listener: PubSubListener) =>
-                        listener.channelName == channelName && listener.eventName === eventName
-                );
+        if (
+            this.listeners.some(
+                (listener: PubSubListener) => listener.channelName == channelName && listener.eventName === eventName
+            )
+        ) {
+            const listener: PubSubListener | undefined = this.listeners.find(
+                (listener: PubSubListener) => listener.channelName == channelName && listener.eventName === eventName
+            );
 
-                this.listeners = this.listeners.filter(
-                    (listener: PubSubListener) =>
-                        listener.channelName == channelName && listener.eventName !== eventName
-                );
+            this.listeners = this.listeners.filter(
+                (listener: PubSubListener) => listener.channelName == channelName && listener.eventName !== eventName
+            );
 
-                if (!IsHelper.isNullOrUndefined(listener) && !IsHelper.isNullOrUndefined(listener.callback)) {
-                    this.ioServer.removeListener(eventName, listener.callback);
-                }
+            if (!IsHelper.isNullOrUndefined(listener) && !IsHelper.isNullOrUndefined(listener.callback)) {
+                this.ioServer.removeListener(eventName, listener.callback);
             }
-        } catch (err) {
-            throw new Error("PubSub Remove Listener Error => " + JSON.stringify(serializeError(err)));
         }
     };
 }

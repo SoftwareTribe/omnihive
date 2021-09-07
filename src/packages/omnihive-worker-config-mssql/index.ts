@@ -3,7 +3,6 @@ import { HiveWorkerConfig } from "@withonevision/omnihive-core/models/HiveWorker
 import { HiveWorkerBase } from "@withonevision/omnihive-core/models/HiveWorkerBase";
 import knex, { Knex } from "knex";
 import sql from "mssql";
-import { serializeError } from "serialize-error";
 import { IConfigWorker } from "@withonevision/omnihive-core/interfaces/IConfigWorker";
 import { HiveWorkerMetadataConfigDatabase } from "@withonevision/omnihive-core/models/HiveWorkerMetadataConfigDatabase";
 import { StringBuilder } from "@withonevision/omnihive-core/helpers/StringBuilder";
@@ -24,38 +23,34 @@ export default class MssqlConfigWorker extends HiveWorkerBase implements IConfig
     }
 
     public async init(name: string, metadata?: any): Promise<void> {
-        try {
-            await AwaitHelper.execute(super.init(name, metadata));
-            this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataConfigDatabase>(
-                HiveWorkerMetadataConfigDatabase,
-                metadata
-            );
+        await AwaitHelper.execute(super.init(name, metadata));
+        this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataConfigDatabase>(
+            HiveWorkerMetadataConfigDatabase,
+            metadata
+        );
 
-            this.sqlConfig = {
-                user: this.typedMetadata.userName,
-                password: this.typedMetadata.password,
-                server: this.typedMetadata.serverAddress,
-                port: this.typedMetadata.serverPort,
-                database: this.typedMetadata.databaseName,
-                options: {
-                    enableArithAbort: true,
-                    encrypt: false,
-                },
-            };
+        this.sqlConfig = {
+            user: this.typedMetadata.userName,
+            password: this.typedMetadata.password,
+            server: this.typedMetadata.serverAddress,
+            port: this.typedMetadata.serverPort,
+            database: this.typedMetadata.databaseName,
+            options: {
+                enableArithAbort: true,
+                encrypt: false,
+            },
+        };
 
-            this.connectionPool = new sql.ConnectionPool({ ...this.sqlConfig });
-            await AwaitHelper.execute(this.connectionPool.connect());
+        this.connectionPool = new sql.ConnectionPool({ ...this.sqlConfig });
+        await AwaitHelper.execute(this.connectionPool.connect());
 
-            const connectionOptions: Knex.Config = {
-                connection: {},
-                pool: { min: 0, max: 10 },
-            };
-            connectionOptions.client = "mssql";
-            connectionOptions.connection = this.sqlConfig;
-            this.connection = knex(connectionOptions);
-        } catch (err) {
-            throw new Error("MSSQL Init Error => " + JSON.stringify(serializeError(err)));
-        }
+        const connectionOptions: Knex.Config = {
+            connection: {},
+            pool: { min: 0, max: 10 },
+        };
+        connectionOptions.client = "mssql";
+        connectionOptions.connection = this.sqlConfig;
+        this.connection = knex(connectionOptions);
     }
 
     public get = async (): Promise<ServerConfig> => {
@@ -230,19 +225,19 @@ export default class MssqlConfigWorker extends HiveWorkerBase implements IConfig
             }
 
             for (let variable of currentSettings.environmentVariables.filter((value) => !value.isSystem)) {
-                const deleteConstantsQuery: string = `DELETE oh_srv_config_environment where config_id = ${this.configId} AND environment_key = '${variable.key}'`;
+                const deleteConstantsQuery: string = `DELETE FROM oh_srv_config_environment where config_id = ${this.configId} AND environment_key = '${variable.key}'`;
                 await AwaitHelper.execute(new sql.Request(transaction).query(deleteConstantsQuery));
             }
 
             for (let worker of currentSettings.workers) {
-                const deleteWorkerQuery: string = `DELETE oh_srv_config_workers where config_id = ${this.configId} AND worker_name = '${worker.name}'`;
+                const deleteWorkerQuery: string = `DELETE FROM oh_srv_config_workers where config_id = ${this.configId} AND worker_name = '${worker.name}'`;
                 await AwaitHelper.execute(new sql.Request(transaction).query(deleteWorkerQuery));
             }
 
             await AwaitHelper.execute(transaction.commit());
         } catch (err) {
             await AwaitHelper.execute(transaction.rollback());
-            throw new Error("MSSQL Config Save Error => " + JSON.stringify(serializeError(err)));
+            throw err;
         }
 
         return true;

@@ -1,3 +1,4 @@
+import { describe, it } from "mocha";
 import { AwaitHelper } from "@withonevision/omnihive-core/helpers/AwaitHelper";
 import { expect } from "chai";
 import dayjs from "dayjs";
@@ -6,39 +7,38 @@ import tz from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
 import DayJsDateWorker from "..";
 import faker from "faker";
+import { IDateWorker } from "@withonevision/omnihive-core/interfaces/IDateWorker";
 
 dayjs.extend(customParseFormat);
 dayjs.extend(utc);
 dayjs.extend(tz);
 
-class TestSetup {
-    public conversionUnit: dayjs.UnitTypeLong = "hour";
-    public dateFormatInvalid: string = "YYYY-MM-DDTHH:mm:ssX";
-    public dateFormatValid: string = "MM/DD/YYYY hh:mma";
-    public dateFormatValidAlternate: string = "YYYY-MM-DDTHH:mm:ssZ";
-    public homeTimezone = "America/New_York";
-    public invalidTimezone = "Bad Timezone";
-    public otherTimezone = "Asia/Tokyo";
-    public workerInvalid: DayJsDateWorker = new DayJsDateWorker();
-    public workerValid: DayJsDateWorker = new DayJsDateWorker();
-    public workerName: string = "testDateDayJSDateWorker";
-}
+const testValues = {
+    conversionUnit: "hour",
+    dateFormatInvalid: "YYYY-MM-DDTHH:mm:ssX",
+    dateFormatValid: "MM/DD/YYYY hh:mma",
+    dateFormatValidAlternate: "YYYY-MM-DDTHH:mm:ssZ",
+    homeTimezone: "America/New_York",
+    invalidTimezone: "Bad Timezone",
+    otherTimezone: "Asia/Tokyo",
+    workerName: "testDateDayJSDateWorker",
+};
 
-const testSetup = new TestSetup();
+const initWorker = async (dateFormat: string): Promise<IDateWorker> => {
+    const worker: DayJsDateWorker = new DayJsDateWorker();
+    await AwaitHelper.execute(worker.init(testValues.workerName, { dateFormat }));
+    return worker;
+};
 
 describe("Worker Test - Date - DayJS", () => {
     describe("Init Functions", () => {
         it("Test Init - Valid Date Format", async () => {
-            await AwaitHelper.execute(
-                testSetup.workerValid.init(testSetup.workerName, { dateFormat: testSetup.dateFormatValid })
-            );
+            await AwaitHelper.execute(initWorker(testValues.dateFormatValid));
         });
 
         it("Test Init - Invalid Date Format", async () => {
             try {
-                await AwaitHelper.execute(
-                    testSetup.workerInvalid.init(testSetup.workerName, { dateFormat: testSetup.dateFormatInvalid })
-                );
+                await AwaitHelper.execute(initWorker(testValues.dateFormatInvalid));
                 expect.fail("Method Expected to Fail");
             } catch (err) {
                 expect(err).to.be.an.instanceOf(Error);
@@ -47,24 +47,22 @@ describe("Worker Test - Date - DayJS", () => {
     });
 
     describe("Worker Functions", () => {
-        it("Convert Between Timezones", () => {
+        it("Convert Between Timezones", async () => {
+            const worker = await AwaitHelper.execute(initWorker(testValues.dateFormatValid));
             const testDate: Date = faker.date.soon();
-            const result = testSetup.workerValid.convertDateBetweenTimezones(
+            const result = worker.convertDateBetweenTimezones(
                 testDate,
-                testSetup.otherTimezone,
-                testSetup.homeTimezone
+                testValues.otherTimezone,
+                testValues.homeTimezone
             );
-            expect(result).to.equal(dayjs(testDate).tz(testSetup.otherTimezone).format(testSetup.dateFormatValid));
+            expect(result).to.equal(dayjs(testDate).tz(testValues.otherTimezone).format(testValues.dateFormatValid));
         });
 
-        it("Convert Between Timezones - Invalid From", () => {
+        it("Convert Between Timezones - Invalid From", async () => {
             try {
+                const worker = await AwaitHelper.execute(initWorker(testValues.dateFormatValid));
                 const testDate: Date = faker.date.soon();
-                testSetup.workerValid.convertDateBetweenTimezones(
-                    testDate,
-                    testSetup.invalidTimezone,
-                    testSetup.homeTimezone
-                );
+                worker.convertDateBetweenTimezones(testDate, testValues.invalidTimezone, testValues.homeTimezone);
 
                 expect.fail("Method Expected To Fail");
             } catch (err) {
@@ -72,14 +70,11 @@ describe("Worker Test - Date - DayJS", () => {
             }
         });
 
-        it("Convert Between Timezones - Invalid To", () => {
+        it("Convert Between Timezones - Invalid To", async () => {
             try {
+                const worker = await AwaitHelper.execute(initWorker(testValues.dateFormatValid));
                 const testDate: Date = faker.date.soon();
-                testSetup.workerValid.convertDateBetweenTimezones(
-                    testDate,
-                    testSetup.otherTimezone,
-                    testSetup.invalidTimezone
-                );
+                worker.convertDateBetweenTimezones(testDate, testValues.otherTimezone, testValues.invalidTimezone);
 
                 expect.fail("Method Expected To Fail");
             } catch (err) {
@@ -87,25 +82,25 @@ describe("Worker Test - Date - DayJS", () => {
             }
         });
 
-        it("Convert Between Timezones - No From Timezone", () => {
+        it("Convert Between Timezones - No From Timezone", async () => {
+            const worker = await AwaitHelper.execute(initWorker(testValues.dateFormatValid));
             const testDate: Date = faker.date.soon();
-            const result = testSetup.workerValid.convertDateBetweenTimezones(testDate, testSetup.otherTimezone);
-            expect(result).to.equal(dayjs(testDate).tz(testSetup.otherTimezone).format(testSetup.dateFormatValid));
+            const result = worker.convertDateBetweenTimezones(testDate, testValues.otherTimezone);
+            expect(result).to.equal(dayjs(testDate).tz(testValues.otherTimezone).format(testValues.dateFormatValid));
         });
 
-        it("Format Date", () => {
+        it("Format Date", async () => {
+            const worker = await AwaitHelper.execute(initWorker(testValues.dateFormatValid));
             const testDate: Date = faker.date.soon();
-            const dateString = testSetup.workerValid.getFormattedDateString(
-                testDate,
-                testSetup.dateFormatValidAlternate
-            );
-            expect(dateString).to.equal(dayjs(testDate).format(testSetup.dateFormatValidAlternate));
+            const dateString = worker.getFormattedDateString(testDate, testValues.dateFormatValidAlternate);
+            expect(dateString).to.equal(dayjs(testDate).format(testValues.dateFormatValidAlternate));
         });
 
-        it("Format Date - No Format Specified", () => {
+        it("Format Date - No Format Specified", async () => {
+            const worker = await AwaitHelper.execute(initWorker(testValues.dateFormatValid));
             const testDate: Date = faker.date.soon();
-            const dateString = testSetup.workerValid.getFormattedDateString(testDate);
-            expect(dateString).to.equal(dayjs(testDate).format(testSetup.dateFormatValid));
+            const dateString = worker.getFormattedDateString(testDate);
+            expect(dateString).to.equal(dayjs(testDate).format(testValues.dateFormatValid));
         });
     });
 });

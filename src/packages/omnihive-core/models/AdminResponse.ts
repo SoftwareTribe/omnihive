@@ -1,13 +1,6 @@
 export class AdminResponse<T = {}> {
-    public data?: T | undefined;
-    public serverGroupId: string;
-    public requestComplete?: boolean;
-    public requestError?: string | undefined;
-
-    constructor() {
-        this.serverGroupId = "";
-        this.requestComplete = true;
-        this.requestError = undefined;
-        this.data = undefined;
-    }
+    public data?: T | undefined = undefined;
+    public serverGroupId: string = "";
+    public requestComplete?: boolean = true;
+    public requestError?: string | undefined = undefined;
 }

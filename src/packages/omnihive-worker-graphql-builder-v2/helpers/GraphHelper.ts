@@ -29,16 +29,28 @@ export class GraphHelper {
                 return "DbInt";
             case "int":
                 return `DbInt`;
+            case "integer":
+                return "DbInt";
             case "smallint":
                 return `DbInt`;
             case "tinyint":
                 return `DbInt`;
+            case "smallserial":
+                return `Int`;
+            case "serial":
+                return `Int`;
+            case "bigserial":
+                return `Int`;
             case "float":
                 return `DbFloat`;
             case "decimal":
                 return `DbFloat`;
             case "numeric":
                 return `DbFloat`;
+            case "real":
+                return "DbFloat";
+            case "double precision":
+                return "DbFloat";
             case "nvarchar":
                 return "DbString";
             case "varchar":
@@ -82,9 +94,17 @@ export class GraphHelper {
                 return "Int";
             case "int":
                 return `Int`;
+            case "integer":
+                return "Int";
             case "smallint":
                 return `Int`;
             case "tinyint":
+                return `Int`;
+            case "smallserial":
+                return `Int`;
+            case "serial":
+                return `Int`;
+            case "bigserial":
                 return `Int`;
             case "float":
                 return `Float`;
@@ -92,6 +112,10 @@ export class GraphHelper {
                 return `Float`;
             case "numeric":
                 return `Float`;
+            case "real":
+                return "Float";
+            case "double precision":
+                return "Float";
             case "nvarchar":
                 return "String";
             case "varchar":
@@ -133,15 +157,27 @@ export class GraphHelper {
                 return "EqualityTypesInt";
             case "int":
                 return `EqualityTypesInt`;
+            case "integer":
+                return "EqualityTypesInt";
             case "smallint":
                 return `EqualityTypesInt`;
             case "tinyint":
+                return `EqualityTypesInt`;
+            case "smallserial":
+                return `EqualityTypesInt`;
+            case "serial":
+                return `EqualityTypesInt`;
+            case "bigserial":
                 return `EqualityTypesInt`;
             case "float":
                 return `EqualityTypesFloat`;
             case "decimal":
                 return `EqualityTypesFloat`;
             case "numeric":
+                return `EqualityTypesFloat`;
+            case "real":
+                return `EqualityTypesFloat`;
+            case "double precision":
                 return `EqualityTypesFloat`;
             case "nvarchar":
                 return "EqualityTypesString";
@@ -426,9 +462,7 @@ export class GraphHelper {
                 }
 
                 // Set the parent key as the linkingTableKey value
-                structure[structureKey].linkingTableKey = parentKey
-                    .replace(this.joinFieldSuffix, "")
-                    .replace(this.aggregateFieldSuffix, "");
+                structure[structureKey].linkingTableKey = parentTable;
             }
         }
     };

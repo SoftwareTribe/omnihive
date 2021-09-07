@@ -1,6 +1,6 @@
 {
     "name": "@withonevision/omnihive-worker-config-json",
-    "version": "6.2.54",
+    "version": "6.2.57",
     "description": "OmniHive JSON Config Worker",
     "license": "MIT",
     "author": {
@@ -24,12 +24,11 @@
     },
     "dependencies": {
         "@withonevision/omnihive-core": "workspace:*",
-        "fs-extra": "10.0.0",
-        "serialize-error": "8.1.0"
+        "fs-extra": "10.0.0"
     },
     "devDependencies": {
         "@types/fs-extra": "9.0.11",
         "chai": "4.3.4",
-        "typescript": "4.2.4"
+        "typescript": "4.3.5"
     }
 }

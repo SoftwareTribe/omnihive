@@ -5,7 +5,6 @@ import { ObjectHelper } from "@withonevision/omnihive-core/helpers/ObjectHelper"
 import { IConfigWorker } from "@withonevision/omnihive-core/interfaces/IConfigWorker";
 import { HiveWorkerBase } from "@withonevision/omnihive-core/models/HiveWorkerBase";
 import fse from "fs-extra";
-import { serializeError } from "serialize-error";
 import { ServerConfig } from "@withonevision/omnihive-core/models/ServerConfig";
 import yaml from "yaml";
 
@@ -21,20 +20,16 @@ export default class JsonConfigWorker extends HiveWorkerBase implements IConfigW
     }
 
     public async init(name: string, metadata?: any): Promise<void> {
-        try {
-            await AwaitHelper.execute(super.init(name, metadata));
-            const typedMetadata: JsonConfigWorkerMetadata = this.checkObjectStructure<JsonConfigWorkerMetadata>(
-                JsonConfigWorkerMetadata,
-                metadata
-            );
+        await AwaitHelper.execute(super.init(name, metadata));
+        const typedMetadata: JsonConfigWorkerMetadata = this.checkObjectStructure<JsonConfigWorkerMetadata>(
+            JsonConfigWorkerMetadata,
+            metadata
+        );
 
-            this.configPath = global.omnihive.getFilePath(typedMetadata.configPath);
+        this.configPath = global.omnihive.getFilePath(typedMetadata.configPath);
 
-            if (!fse.existsSync(this.configPath)) {
-                throw new Error("Config path cannot be found");
-            }
-        } catch (err) {
-            throw new Error("YAML Config Worker Init Error => " + JSON.stringify(serializeError(err)));
+        if (!fse.existsSync(this.configPath)) {
+            throw new Error("Config path cannot be found");
         }
     }
 

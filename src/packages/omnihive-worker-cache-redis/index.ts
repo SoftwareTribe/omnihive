@@ -21,6 +21,10 @@ export default class RedisCacheWorker extends HiveWorkerBase implements ICacheWo
             metadata
         );
         this.redis = new Redis(typedMetadata.connectionString);
+
+        this.redis.on("error", () => {
+            this.redis.disconnect();
+        });
     }
 
     public exists = async (key: string): Promise<boolean> => {

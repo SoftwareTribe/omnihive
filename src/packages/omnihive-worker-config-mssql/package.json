@@ -1,6 +1,6 @@
 {
     "name": "@withonevision/omnihive-worker-config-mssql",
-    "version": "6.2.54",
+    "version": "6.2.57",
     "description": "OmniHive Config MSSQL Database Worker",
     "license": "MIT",
     "author": {
@@ -26,12 +26,11 @@
         "@withonevision/omnihive-core": "workspace:*",
         "knex": "0.95.7",
         "mssql": "7.1.3",
-        "serialize-error": "8.1.0",
         "tedious": "11.0.9"
     },
     "devDependencies": {
         "@types/mssql": "6.0.8",
         "chai": "4.3.4",
-        "typescript": "4.2.4"
+        "typescript": "4.3.5"
     }
 }

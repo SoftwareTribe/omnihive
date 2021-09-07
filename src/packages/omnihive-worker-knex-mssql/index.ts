@@ -13,7 +13,6 @@ import { ProcFunctionSchema } from "@withonevision/omnihive-core/models/ProcFunc
 import { TableSchema } from "@withonevision/omnihive-core/models/TableSchema";
 import knex, { Knex } from "knex";
 import sql from "mssql";
-import { serializeError } from "serialize-error";
 import fse from "fs-extra";
 import path from "path";
 import { IsHelper } from "@withonevision/omnihive-core/helpers/IsHelper";
@@ -29,38 +28,36 @@ export default class MssqlDatabaseWorker extends HiveWorkerBase implements IData
     }
 
     public async init(name: string, metadata?: any): Promise<void> {
-        try {
-            await AwaitHelper.execute(super.init(name, metadata));
-            this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataDatabase>(
-                HiveWorkerMetadataDatabase,
-                metadata
-            );
+        await AwaitHelper.execute(super.init(name, metadata));
+        this.typedMetadata = this.checkObjectStructure<HiveWorkerMetadataDatabase>(
+            HiveWorkerMetadataDatabase,
+            metadata
+        );
 
-            this.sqlConfig = {
-                user: this.typedMetadata.userName,
-                password: this.typedMetadata.password,
-                server: this.typedMetadata.serverAddress,
-                port: this.typedMetadata.serverPort,
-                database: this.typedMetadata.databaseName,
-                options: {
-                    enableArithAbort: true,
-                    encrypt: false,
-                },
-            };
+        this.sqlConfig = {
+            user: this.typedMetadata.userName,
+            password: this.typedMetadata.password,
+            server: this.typedMetadata.serverAddress,
+            port: this.typedMetadata.serverPort,
+            database: this.typedMetadata.databaseName,
+            options: {
+                enableArithAbort: true,
+                encrypt: false,
+            },
+        };
 
-            this.connectionPool = new sql.ConnectionPool({ ...this.sqlConfig });
-            await AwaitHelper.execute(this.connectionPool.connect());
+        this.connectionPool = new sql.ConnectionPool({ ...this.sqlConfig });
+        await AwaitHelper.execute(this.connectionPool.connect());
 
-            const connectionOptions: Knex.Config = {
-                connection: {},
-                pool: { min: 0, max: this.typedMetadata.connectionPoolLimit },
-            };
-            connectionOptions.client = "mssql";
-            connectionOptions.connection = this.sqlConfig;
-            this.connection = knex(connectionOptions);
-        } catch (err) {
-            throw new Error("MSSQL Init Error => " + JSON.stringify(serializeError(err)));
-        }
+        await AwaitHelper.execute(this.executeQuery("select 1 as dummy"));
+
+        const connectionOptions: Knex.Config = {
+            connection: {},
+            pool: { min: 0, max: this.typedMetadata.connectionPoolLimit },
+        };
+        connectionOptions.client = "mssql";
+        connectionOptions.connection = this.sqlConfig;
+        this.connection = knex(connectionOptions);
     }
 
     public executeQuery = async (query: string, disableLog?: boolean): Promise<any[][]> => {
@@ -101,7 +98,7 @@ export default class MssqlDatabaseWorker extends HiveWorkerBase implements IData
             }
         });
 
-        return this.executeQuery(builder.outputString());
+        return AwaitHelper.execute(this.executeQuery(builder.outputString()));
     };
 
     public getSchema = async (): Promise<ConnectionSchema> => {
@@ -127,9 +124,12 @@ export default class MssqlDatabaseWorker extends HiveWorkerBase implements IData
                 throw new Error(`Cannot find a table executor for ${this.name}`);
             }
         } else {
-            if (fse.existsSync(path.join(__dirname, "defaultTables.sql"))) {
+            if (fse.existsSync(path.join(__dirname, "scripts", "defaultTables.sql"))) {
                 tableResult = await AwaitHelper.execute(
-                    this.executeQuery(fse.readFileSync(path.join(__dirname, "defaultTables.sql"), "utf8"), true)
+                    this.executeQuery(
+                        fse.readFileSync(path.join(__dirname, "scripts", "defaultTables.sql"), "utf8"),
+                        true
+                    )
                 );
             } else {
                 throw new Error(`Cannot find a table executor for ${this.name}`);
@@ -148,9 +148,12 @@ export default class MssqlDatabaseWorker extends HiveWorkerBase implements IData
                 throw new Error(`Cannot find a proc executor for ${this.name}`);
             }
         } else {
-            if (fse.existsSync(path.join(__dirname, "defaultProcFunctions.sql"))) {
+            if (fse.existsSync(path.join(__dirname, "scripts", "defaultProcFunctions.sql"))) {
                 procResult = await AwaitHelper.execute(
-                    this.executeQuery(fse.readFileSync(path.join(__dirname, "defaultProcFunctions.sql"), "utf8"), true)
+                    this.executeQuery(
+                        fse.readFileSync(path.join(__dirname, "scripts", "defaultProcFunctions.sql"), "utf8"),
+                        true
+                    )
                 );
             } else {
                 throw new Error(`Cannot find a proc executor for ${this.name}`);

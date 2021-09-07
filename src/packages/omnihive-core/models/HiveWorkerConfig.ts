@@ -1,7 +1,7 @@
 import { HiveWorkerType } from "../enums/HiveWorkerType";
 
 export class HiveWorkerConfig {
-    public type: HiveWorkerType | string = HiveWorkerType.User;
+    public type: HiveWorkerType | string = HiveWorkerType.Custom;
     public name: string = "";
     public package: string = "";
     public version: string = "";

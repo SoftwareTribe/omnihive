@@ -1,0 +1,33 @@
+{
+    "name": "@withonevision/omnihive-worker-log-elastic",
+    "version": "6.2.54",
+    "description": "OmniHive Elastic Log Worker",
+    "license": "MIT",
+    "author": {
+        "name": "With One Vision Technologies",
+        "url": "https://www.withone.vision",
+        "email": "developers@withone.vision"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/WithOneVisionTechnologies/omnihive.git"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "keywords": [
+        "OmniHive",
+        "With One Vision"
+    ],
+    "scripts": {
+        "build": "tsc"
+    },
+    "dependencies": {
+        "@elastic/elasticsearch": "7.12.0",
+        "@withonevision/omnihive-core": "workspace:*"
+    },
+    "devDependencies": {
+        "chai": "4.3.4",
+        "typescript": "4.3.5"
+    }
+}

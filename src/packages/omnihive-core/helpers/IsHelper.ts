@@ -23,11 +23,7 @@ export class IsHelper {
     };
 
     public static isEmptyString = (value: unknown): boolean => {
-        try {
-            return IsHelper.isString(value) && String(value).length === 0;
-        } catch {
-            return false;
-        }
+        return IsHelper.isString(value) && String(value).length === 0;
     };
 
     public static isEmptyStringOrWhitespace = (value: unknown): boolean => {
@@ -53,6 +49,14 @@ export class IsHelper {
         return value === null;
     };
 
+    public static isNullOrUndefined = (value: unknown): value is null | undefined => {
+        return IsHelper.isNull(value) || IsHelper.isUndefined(value);
+    };
+
+    public static isNullOrUndefinedOrEmptyStringOrWhitespace = (value: unknown): value is null | undefined | "" => {
+        return IsHelper.isNullOrUndefined(value) || IsHelper.isEmptyStringOrWhitespace(value);
+    };
+
     public static isNumber = (value: unknown): value is number => {
         if (typeof value === "number") {
             return true;
@@ -69,14 +73,6 @@ export class IsHelper {
         const regex: RegExp = /^[0-9]*$/g;
 
         return regex.test(String(value));
-    };
-
-    public static isNullOrUndefined = (value: unknown): value is null | undefined => {
-        return IsHelper.isNull(value) || IsHelper.isUndefined(value);
-    };
-
-    public static isNullOrUndefinedOrEmptyStringOrWhitespace = (value: unknown): value is null | undefined | "" => {
-        return IsHelper.isNullOrUndefined(value) || IsHelper.isEmptyStringOrWhitespace(value);
     };
 
     public static isObject = (value: unknown): value is object => {
@@ -96,19 +92,11 @@ export class IsHelper {
         return typeof value === "string";
     };
 
-    public static isTruthy = (value: unknown): boolean => {
-        return Boolean(value);
-    };
-
     public static isUndefined = (value: unknown): value is undefined => {
         return typeof value === "undefined" || value === undefined;
     };
 
     public static isWhiteSpaceString = (value: unknown): value is string => {
-        try {
-            return IsHelper.isString(value) && !/\S/.test(String(value));
-        } catch {
-            return false;
-        }
+        return IsHelper.isString(value) && !IsHelper.isEmptyString(value) && !/\S/.test(String(value));
     };
 }

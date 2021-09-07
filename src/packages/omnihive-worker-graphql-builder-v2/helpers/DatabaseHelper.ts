@@ -674,13 +674,26 @@ export class DatabaseHelper {
             const schemaKey = structure.linkingTableKey ? structure.linkingTableKey : tableKey;
 
             // Retrieve the TableSchema of the column in the parent table
-            const primaryColumn: TableSchema | undefined = schema[schemaKey]?.find(
+            let primaryColumn: TableSchema | undefined = schema[schemaKey]?.find(
                 (x) =>
                     x.columnNameEntity === structure.args.join.from ||
                     (!structure.args.join.from && x.columnNameEntity === queryKey.replace(this.joinFieldSuffix, ""))
             );
 
             let parentAlias = "";
+
+            // If the from argument was improperly entered then see if it is needed
+            // Possible Causes: Circular link
+            if (!primaryColumn?.columnForeignKeyColumnName) {
+                const allLinks: TableSchema[] = schema[schemaKey]?.filter(
+                    (x) => x.columnNameEntity === queryKey.replace(this.joinFieldSuffix, "")
+                );
+
+                // If there is only one valid link to the connecting tables then use that column
+                if (allLinks && allLinks?.length === 1 && allLinks[0].columnForeignKeyColumnName) {
+                    primaryColumn = allLinks[0];
+                }
+            }
 
             // If the primary column was found this is a proper join
             if (primaryColumn) {

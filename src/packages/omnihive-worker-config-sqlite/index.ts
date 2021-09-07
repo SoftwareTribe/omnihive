@@ -10,7 +10,6 @@ import { HiveWorkerBase } from "@withonevision/omnihive-core/models/HiveWorkerBa
 import { HiveWorkerMetadataConfigDatabase } from "@withonevision/omnihive-core/models/HiveWorkerMetadataConfigDatabase";
 import fse from "fs-extra";
 import knex, { Knex } from "knex";
-import { serializeError } from "serialize-error";
 import sqlite from "sqlite3";
 import { ServerConfig } from "@withonevision/omnihive-core/models/ServerConfig";
 
@@ -38,27 +37,23 @@ export default class SqliteConfigWorker extends HiveWorkerBase implements IConfi
         sqliteMetadata.sslCertPath = "";
         sqliteMetadata.userName = "";
 
-        try {
-            await AwaitHelper.execute(super.init(name, metadata));
-            this.typedMetadata = this.checkObjectStructure<SqliteWorkerMetadata>(SqliteWorkerMetadata, sqliteMetadata);
+        await AwaitHelper.execute(super.init(name, metadata));
+        this.typedMetadata = this.checkObjectStructure<SqliteWorkerMetadata>(SqliteWorkerMetadata, sqliteMetadata);
 
-            const filePath = global.omnihive.getFilePath(this.typedMetadata.filename);
+        const filePath = global.omnihive.getFilePath(this.typedMetadata.filename);
 
-            if (!fse.existsSync(filePath)) {
-                throw new Error("SQLite database cannot be found");
-            }
-
-            const connectionOptions: Knex.Config = {
-                client: "sqlite3",
-                useNullAsDefault: true,
-                connection: {
-                    filename: this.typedMetadata.filename,
-                },
-            };
-            this.connection = knex(connectionOptions);
-        } catch (err) {
-            throw new Error("Sqlite Init Error => " + JSON.stringify(serializeError(err)));
+        if (!fse.existsSync(filePath)) {
+            throw new Error("SQLite database cannot be found");
         }
+
+        const connectionOptions: Knex.Config = {
+            client: "sqlite3",
+            useNullAsDefault: true,
+            connection: {
+                filename: this.typedMetadata.filename,
+            },
+        };
+        this.connection = knex(connectionOptions);
     }
 
     public get = async (): Promise<ServerConfig> => {
@@ -224,19 +219,19 @@ export default class SqliteConfigWorker extends HiveWorkerBase implements IConfi
                 }
 
                 for (let variable of currentSettings.environmentVariables.filter((value) => !value.isSystem)) {
-                    const deleteConstantsQuery: string = `DELETE oh_srv_config_environment where config_id = ${this.configId} AND environment_key = '${variable.key}';`;
+                    const deleteConstantsQuery: string = `DELETE FROM oh_srv_config_environment where config_id = ${this.configId} AND environment_key = '${variable.key}';`;
                     database.run(deleteConstantsQuery);
                 }
 
                 for (let worker of currentSettings.workers) {
-                    const deleteWorkerQuery: string = `DELETE oh_srv_config_workers where config_id = ${this.configId} AND worker_name = '${worker.name}';`;
+                    const deleteWorkerQuery: string = `DELETE FROM oh_srv_config_workers where config_id = ${this.configId} AND worker_name = '${worker.name}';`;
                     database.run(deleteWorkerQuery);
                 }
 
                 database.run("COMMIT");
             } catch (err) {
                 database.run("ROLLBACK");
-                throw new Error("SQLite Config Save Error => " + JSON.stringify(serializeError(err)));
+                throw err;
             } finally {
                 database.close;
             }

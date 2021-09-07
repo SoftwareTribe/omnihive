@@ -1,7 +1,9 @@
+import { describe, it, beforeEach } from "mocha";
 import { expect } from "chai";
 import { AwaitHelper } from "@withonevision/omnihive-core/helpers/AwaitHelper";
 import faker from "faker";
 import RedisCacheWorker from "..";
+import { ICacheWorker } from "@withonevision/omnihive-core/interfaces/ICacheWorker";
 
 const testValues = {
     cacheKey: faker.datatype.string(),
@@ -12,7 +14,7 @@ const testValues = {
     workerName: "testCacheRedisCacheWorker",
 };
 
-const initWorker = async (connectionString: string): Promise<RedisCacheWorker> => {
+const initWorker = async (connectionString: string): Promise<ICacheWorker> => {
     const worker: RedisCacheWorker = new RedisCacheWorker();
     await AwaitHelper.execute(worker.init(testValues.workerName, { connectionString }));
     return worker;
